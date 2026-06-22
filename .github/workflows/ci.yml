@@ -4,6 +4,7 @@ on:
     branches: 
     - main
     - 'phase-1/week-1/day-5-docker' # Thêm nhánh này vào danh sách trigger
+    - 'phase-1/week-2/day-2-cicd-advanced '
   pull_request:
     branches: [main]
 
