@@ -1,0 +1,58 @@
+name: Reusable Build and Push
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        description: 'Tên của Docker image'
+        required: true
+        type: string
+      image_tag:
+        description: 'Tag của Docker image'
+        required: true
+        type: string
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Open case-insensitive repository owner
+        id: repo_owner
+        run: echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./day-5-docker
+          file: ./day-5-docker/Dockerfile
+          push: true
+          # Gọi lại giá trị từ tham số input thay vì fix cứng
+          tags: |
+            ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+            ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ inputs.image_name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ inputs.image_name }}:${{ inputs.image_tag }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+      - name: Generate SBOM using Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ inputs.image_name }}:${{ inputs.image_tag }}'
+          artifact-name: sbom.spdx.json
+          output-file: ./sbom.spdx.json
