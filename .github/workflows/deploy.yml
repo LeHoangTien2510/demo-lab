@@ -1,0 +1,50 @@
+name: Deploy Workflow
+
+# Cấu hình các sự kiện kích hoạt workflow
+on:
+  push:
+    branches:
+      - main     # Kích hoạt khi có code push hoặc merge vào nhánh main
+    tags:
+      - 'v*.*.*' # Kích hoạt khi có tag đúng định dạng v*.*.* được push lên
+
+jobs:
+  # Job 1: Deploy lên môi trường Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    # Chỉ chạy job này nếu sự kiện kích hoạt là push vào nhánh main (không chạy khi push tag)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Simulate Deploy to Staging
+        run: |
+          echo "Connecting to Staging VM via SSH..."
+          echo "Pulling latest code from branch main..."
+          echo "Restarting application services on Staging..."
+          echo "Deploy to Staging completed successfully!"
+
+  # Job 2: Deploy lên môi trường Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    # Chỉ chạy job này nếu sự kiện kích hoạt là push tag đúng định dạng
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # Liên kết với environment trên GitHub để kích hoạt tính năng "Required Reviewer"
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Simulate Deploy to Production
+        run: |
+          echo "Connecting to Production VM via SSH..."
+          echo "Deploying release version: ${{ github.ref_name }}..."
+          echo "Running database migrations..."
+          echo "Reloading Production services gracefully..."
+          echo "Deploy to Production completed successfully!"

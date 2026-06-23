@@ -1,0 +1,65 @@
+name: ci
+on:
+  push:
+    branches: 
+    - main
+    - 'phase-1/week-1/day-5-docker' # Thêm nhánh này vào danh sách trigger
+    - 'phase-1/week-2/day-2-cicd-advanced'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './day-5-docker/app/package-lock.json' # Thêm dòng này vào cả 2 job lint và test
+      - run: npm ci
+        working-directory: ./day-5-docker/app
+      - run: npm run lint
+        working-directory: ./day-5-docker/app
+
+  test:
+    needs: lint
+    # Sửa dòng này để lấy hệ điều hành (os) từ matrix
+    runs-on: ${{ matrix.os }} 
+    
+    # Bổ sung khối chiến lược (strategy) từ đề bài
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+        os: [ubuntu-22.04, ubuntu-24.04]
+        exclude:
+          - { node: 18, os: ubuntu-24.04 }
+          
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Sửa dòng này để lấy phiên bản Node.js (node) từ matrix
+          node-version: ${{ matrix.node }} 
+          cache: 'npm'
+          cache-dependency-path: './day-5-docker/app/package-lock.json'
+      - run: npm ci
+        working-directory: ./day-5-docker/app
+      - run: npm test
+        working-directory: ./day-5-docker/app
+
+  call-reusable-build:
+    needs: test
+    if: github.event_name == 'push'
+    # Gọi file reusable build
+    uses: ./.github/workflows/reusable-build.yml
+    # Truyền tham số (inputs) vào
+    with:
+      image_name: demo-app
+      image_tag: sha-${{ github.sha }}
