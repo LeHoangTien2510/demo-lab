@@ -1,19 +1,22 @@
-name: Deploy Workflow
+name: Deploy and Release Workflow
 
-# Cấu hình các sự kiện kích hoạt workflow
 on:
   push:
     branches:
-      - main     # Kích hoạt khi có code push hoặc merge vào nhánh main
+      - main
     tags:
-      - 'v*.*.*' # Kích hoạt khi có tag đúng định dạng v*.*.* được push lên
+      - 'v*.*.*'
+
+# Cấp quyền cho GitHub Actions để tạo Release và đẩy gói (Packages) nếu cần
+permissions:
+  contents: write
+  packages: write
 
 jobs:
-  # Job 1: Deploy lên môi trường Staging
+  # Job Deploy Staging (Giữ nguyên từ Part C)
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    # Chỉ chạy job này nếu sự kiện kích hoạt là push vào nhánh main (không chạy khi push tag)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: staging
     
@@ -24,27 +27,41 @@ jobs:
       - name: Simulate Deploy to Staging
         run: |
           echo "Connecting to Staging VM via SSH..."
-          echo "Pulling latest code from branch main..."
-          echo "Restarting application services on Staging..."
           echo "Deploy to Staging completed successfully!"
 
-  # Job 2: Deploy lên môi trường Production
+  # Job Deploy Production + Tag-based Release
   deploy-production:
-    name: Deploy to Production
+    name: Deploy to Production & Create Release
     runs-on: ubuntu-latest
-    # Chỉ chạy job này nếu sự kiện kích hoạt là push tag đúng định dạng
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    # Liên kết với environment trên GitHub để kích hoạt tính năng "Required Reviewer"
-    environment: production
+    environment: production 
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Lấy toàn bộ lịch sử commit để tự sinh Release Note chính xác
+
+      # 1. Mô phỏng việc Build & Tag Docker Image 
+      - name: Simulate Docker Build & Tag
+        run: |
+          echo "Building Docker image..."
+          echo "Tagging image with version: ${{ github.ref_name }}"
+          echo "Successfully tagged: ghcr.io/${{ github.repository }}/demo-app:${{ github.ref_name }}"
+          echo "Pushing Docker image to GitHub Container Registry (GHCR)..."
 
       - name: Simulate Deploy to Production
         run: |
-          echo "Connecting to Production VM via SSH..."
-          echo "Deploying release version: ${{ github.ref_name }}..."
-          echo "Running database migrations..."
-          echo "Reloading Production services gracefully..."
+          echo "Connecting to Production VM..."
+          echo "Pulling image: ghcr.io/${{ github.repository }}/demo-app:${{ github.ref_name }}..."
           echo "Deploy to Production completed successfully!"
+
+      # 3. Tự động tạo GitHub Release & Tự sinh Release Note 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true # Tự động tạo release note dựa trên các commit mới
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
